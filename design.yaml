@@ -1,0 +1,61 @@
+# Design Declaration - MorphoHDL Anamorphic Growth
+# Parent: unified-design (MDU)
+# Version: 1.0.0
+
+name: morphohdl-anamorphic-growth
+version: "1.0.0"
+status: active
+
+# Parent MDU
+parent:
+  repo: gerivdb/unified-design
+  path: L0-CANON/unified-design
+  adr: ADR-013-meta-design-validation-protocol
+
+# Metriques heritees du MDU
+metrics:
+  inheritance_depth:
+    max: 3
+    severity: error
+  latency_p99:
+    max_ms: 45
+    severity: warning
+  power_consumption:
+    max_w: 12
+    severity: warning
+
+# Contraintes specifiques
+constraints:
+  - id: MAG-001
+    name: "Croissance Experimentale"
+    description: "Circuits adaptatifs avec croissance morphologique"
+    severity: info
+  - id: MAG-002
+    name: "Base 243"
+    description: "Structure ternaire native 3^5"
+    severity: error
+  - id: MAG-003
+    name: "RVBA"
+    description: "Canaux de couleur semantique"
+    severity: info
+  - id: MAG-004
+    name: "O(1) Index"
+    description: "Acces constant via index ternaire"
+    severity: error
+
+# Dependances
+dependencies:
+  - name: unified-design
+    version: ">=1.0.0"
+    required: true
+  - name: PIANO
+    version: ">=1.0.0"
+    required: true
+  - name: KEEL
+    version: ">=1.0.0"
+    required: true
+
+# References
+references:
+  - ADR-MAG-001
+  - unified-design/meta-design.yaml
