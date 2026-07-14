@@ -1,0 +1,70 @@
+# MorphoHDL Schema v1
+
+## 1. Schéma de base
+
+```yaml
+morphohdl:
+  version: "1.0"
+  name: string
+  description: string
+  phases:
+    - phase: 0
+      type: init
+      state: base
+    - phase: 1
+      type: grow
+      state: blocks_added
+    - phase: 2
+      type: evolve
+      state: ternary_transform
+    - phase: 3
+      type: optimize
+      state: pos_neu_neg
+    - phase: 4
+      type: finalize
+      state: stable
+  signals:
+    - name: string
+      type: pos | neu | neg
+      phase: number
+```
+
+## 2. Validation
+
+### 2.1 Contraintes
+- Chaque phase doit être cohérente avec la précédente
+- Les signaux ternaires doivent être documentés
+- La croissance suit un pattern prévisible
+
+### 2.2 Règles
+```yaml
+rules:
+  - id: phase_sequential
+    description: "Phases séquentielles (0→1→2→3→4)"
+    severity: error
+  
+  - id: ternary_documented
+    description: "Signaux ternaires documentés"
+    severity: warning
+```
+
+## 3. Exemples
+
+### 3.1 Exemple de base
+```yaml
+morphohdl:
+  version: "1.0"
+  name: "Blinker"
+  description: "Exemple simple de croissance"
+  phases:
+    - phase: 0
+      type: init
+      state: base
+    - phase: 1
+      type: grow
+      state: blocks_added
+  signals:
+    - name: "clk"
+      type: pos
+      phase: 1
+```
