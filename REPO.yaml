@@ -1,0 +1,34 @@
+type: Design Pattern Repository
+name: morphohdl-anamorphic-growth
+slug: morphohdl-anamorphic-growth
+strate: L4
+intent_hash: 0xMORPHOHDL_ANAMORPHIC_GROWTH_20260714
+description: |
+  Design pattern pour la croissance morphique des structures HDL via des transformations ternaires.
+  Inspiré des concepts d'anamorphose et de la triade cognitive.
+owner: gerivdb
+status: active
+created: 2026-07-14
+last_updated: 2026-07-14
+
+# Livrables associés
+intents:
+  - INT-MORPHOHDL-001
+
+prds:
+  - PRD-MORPHOHDL-001
+
+epics:
+  - EPIC-MORPHOHDL-001
+
+adrs:
+  - ADR-MORPHOHDL-001-anamorphose-protocol
+
+# Références croisées
+crosslinks:
+  - sonar-driven-design
+  - triadic-compound-eye
+
+# Standards
+standards:
+  - morphohdl-schema.yaml
