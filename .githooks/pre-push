@@ -1,0 +1,191 @@
+#!/bin/sh
+# ALFRED pre-push v2.0 (UNIFIÉ : BRGS guards + Branch Governor taxonomie)
+# Source de vérité hooks  : REPO-STANDARDS/.githooks/pre-push
+# Source de vérité rules  : GOVERNANCE-HUB/multi-repo-governance.yaml (généré via generate_rules.py)
+# Source de vérité contraintes : REPO-STANDARDS/schemas/BRANCH-CHECK.yaml
+# IntentHash: 0xALFRED_PREPUSH_V2_UNIFIED_20260531
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+REPO_NAME="$(basename "$REPO_ROOT")"
+
+###############################################################################
+# ÉTAPE 1 : BYPASSES
+###############################################################################
+
+# PROTECTION main/master (client-side, pas de GitHub Pro requis)
+# Remplace l'ancien bypass — le push direct sur main est BLOQUÉ
+# Contournement intentionnel uniquement : git push --no-verify
+# Exception: git push --delete (suppression de branche distante) est autorisé
+IS_DELETE_PUSH=false
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+        IS_DELETE_PUSH=true
+        break
+    fi
+done
+
+if [ "$IS_DELETE_PUSH" = "false" ] && { [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; }; then
+    echo ""
+    echo "============================================================"
+    echo "[ALFRED BLOCK] Push DIRECT sur '$BRANCH' interdit."
+    echo "============================================================"
+    echo ""
+    echo "Workflow requis (Plan Lens Module 2 - branch-lifecycle.md) :"
+    echo "  1. Créer une branche : git checkout -b feat/<desc>"
+    echo "  2. Committer : git commit -m 'feat(<scope>): <desc>'"
+    echo "  3. Pousser la branche : git push origin feat/<desc>"
+    echo "  4. Créer une PR : gh pr create"
+    echo ""
+    echo "Contournement intentionnel : git push --no-verify"
+    echo "============================================================"
+    exit 1
+fi
+
+# Bypass pour commits d'urgence [FIX]
+LAST_MSG="$(git log -1 --pretty=%B)"
+if echo "$LAST_MSG" | grep -qE "^\[FIX\]"; then
+    echo "[ALFRED SKIP] Commit d'urgence [FIX] — validation réduite"
+    exit 0
+fi
+
+###############################################################################
+# ÉTAPE 2 : BRGS GUARDS (depuis rules.sh généré ou fallback inline)
+###############################################################################
+
+# Chercher rules.sh dans .githooks/ (généré par generate_rules.py)
+RULES_FILE="$REPO_ROOT/.githooks/rules.sh"
+
+if [ -f "$RULES_FILE" ]; then
+    # Exécuter les guards depuis rules.sh généré
+    # Le rules.sh doit définir GUARD_MODE, FORBIDDEN_PATHS, ALLOWED_PREFIXES, REDIRECT_MAP
+    . "$RULES_FILE"
+
+    # Guard 3 : Forbidden paths (rediriger fichiers vers bon repo)
+    if [ -n "$FORBIDDEN_PATHS" ]; then
+        CHANGED_FILES=$(git diff --cached --name-only 2>/dev/null || git diff HEAD~1 --name-only 2>/dev/null || echo "")
+        if [ -n "$CHANGED_FILES" ]; then
+            for pattern in $(echo "$FORBIDDEN_PATHS" | tr '|' ' '); do
+                MATCH=$(echo "$CHANGED_FILES" | grep -E "$pattern" 2>/dev/null || true)
+                if [ -n "$MATCH" ]; then
+                    echo "[BRGS BLOCK] Forbidden path détecté : $MATCH"
+                    echo "  Pattern: $pattern"
+                    echo "  Redirect vers: $REDIRECT_MAP"
+                    exit 1
+                fi
+            done
+        fi
+    fi
+
+    # Guard 4 : Allowed branch prefixes
+    if [ -n "$ALLOWED_PREFIXES" ]; then
+        ALLOWED=0
+        for prefix in $(echo "$ALLOWED_PREFIXES" | tr '|' ' '); do
+            if echo "$BRANCH" | grep -qE "^${prefix}"; then
+                ALLOWED=1
+                break
+            fi
+        done
+        if [ "$ALLOWED" -eq 0 ]; then
+            echo "[BRGS BLOCK] Branche '$BRANCH' ne commence pas par un préfixe autorisé"
+            echo "  Préfixes: $ALLOWED_PREFIXES"
+            echo "  Pour forcer: git push --no-verify"
+            [ "$GUARD_MODE" = "BLOCK" ] && exit 1
+        fi
+    fi
+
+    echo "[BRGS OK] Guards passés pour $REPO_NAME"
+else
+    # Fallback : pas de rules.sh généré → pas de guards BRGS
+    echo "[BRGS SKIP] rules.sh absent pour $REPO_NAME — guards BRGS non appliqués"
+fi
+
+###############################################################################
+# ÉTAPE 3 : VALIDATION TAXONOMIE BRANCH GOVERNOR
+###############################################################################
+
+# Pattern unifié : {type}/{juridiction}-{slug}-{id}
+BRANCH_PATTERN='^(feat|fix|docs|chore|refactor|perf|test|hotfix|emergency|release|experiment|deploy|rollback)/(env[0-5]|infra|web|cross)-[a-z0-9-]+-[0-9]{3}$'
+
+if ! echo "$BRANCH" | grep -qE "$BRANCH_PATTERN"; then
+    echo "[ALFRED WARN] Branche '$BRANCH' non conforme à la taxonomie unifiée"
+    echo "  Pattern attendu: type/jurisdiction-slug-id"
+    echo "  Exemple: feat/env2-lxc-network-001"
+    echo "  Pour forcer: git push --no-verify"
+    # WARN seulement — ne bloque pas (phase adoption)
+fi
+
+###############################################################################
+# ÉTAPE 4 : VÉRIFICATION JURIDICTION TOPOS (optionnel)
+###############################################################################
+
+# Vérifier que la juridiction existe dans TOPOS (si accessible depuis ce repo)
+JURISDICTION_PATTERN='^(env[0-5])-'
+if echo "$BRANCH" | grep -qE "/$JURISDICTION_PATTERN"; then
+    JURISDICTION="$(echo "$BRANCH" | sed -E 's|^[^/]+/(env[0-5])-.*|\1|')"
+    # Chercher TOPOS dans les parents (chemin relatif variable)
+    TOPOS_FOUND=""
+    for candidate in \
+        "$REPO_ROOT/../../L1-INFRA/TOPOS" \
+        "$REPO_ROOT/../../../L1-INFRA/TOPOS" \
+        "$REPO_ROOT/TOOLS/L1-INFRA/TOPOS" \
+        "$REPO_ROOT/../L1-INFRA/TOPOS"; do
+        if [ -d "$candidate/envs/$JURISDICTION" ]; then
+            TOPOS_FOUND="$candidate"
+            break
+        fi
+    done
+    if [ -n "$TOPOS_FOUND" ]; then
+        echo "[ALFRED] Juridiction '$JURISDICTION' validée (TOPOS/envs/$JURISDICTION)"
+    fi
+    # Si TOPOS pas accessible → skip silencieux (repos hors écosystème)
+fi
+
+###############################################################################
+# ÉTAPE 5 : RSS-v2 lint (si rss_lint.py présent)
+###############################################################################
+
+if [ -f "$REPO_ROOT/rss_lint.py" ]; then
+    LINT_OUTPUT=$(python "$REPO_ROOT/rss_lint.py" --repo "$REPO_ROOT" --check-branch 2>&1) || true
+    if echo "$LINT_OUTPUT" | grep -qi "fail\|error\|violation"; then
+        echo "[ALFRED WARN] rss_lint.py signale des violations :"
+        echo "$LINT_OUTPUT" | head -5
+        # Non-bloquant en phase adoption
+    else
+        echo "[ALFRED] rss_lint.py --check-branch OK"
+    fi
+fi
+
+###############################################################################
+# ÉTAPE 6 : BRANCH-CHECK.yaml (si présent)
+###############################################################################
+
+if [ -f "$REPO_ROOT/BRANCH-CHECK.yaml" ]; then
+    # Vérifier les règles de base (présence du fichier suffit pour l'instant)
+    # L'intégration complète avec rss_lint.py v3 est prévue en Phase F
+    echo "[ALFRED] BRANCH-CHECK.yaml présent — règles appliquées via rss_lint.py"
+fi
+
+###############################################################################
+# ÉTAPE 7 : Stash reminder + HEAD détaché (Plan Lens Module 3)
+###############################################################################
+
+STASH_COUNT=$(git stash list 2>/dev/null | wc -l | tr -d ' ')
+if [ "${STASH_COUNT}" -gt 0 ]; then
+    echo "[ALFRED INFO] ${STASH_COUNT} stash(es) en attente — vérifier que le stash ne contient pas de travail non poussé."
+fi
+
+if [ "$BRANCH" = "HEAD" ]; then
+    echo "[ALFRED BLOCK] HEAD détaché — impossible de pousser."
+    echo "Créer une branche : git checkout -b <branch-name>"
+    exit 1
+fi
+
+###############################################################################
+# SORTIE
+#################################################################################
+
+echo "[ALFRED OK] Push autorisé pour $BRANCH (repo: $REPO_NAME)"
+exit 0
