@@ -1,0 +1,20 @@
+{
+  "repo": "morphohdl-anamorphic-growth",
+  "statement_hash": "8f65517690f75cddb4b7a07cda004654",
+  "curx_validated": true,
+  "result": {
+    "anomalies": [
+      "Missing teaches edges",
+      "Missing prerequisite_of edges",
+      "Missing consolidates edges"
+    ],
+    "causal_accuracy": 0.88,
+    "counterfactual_depth": 0.61,
+    "edges_validated": [],
+    "fragility": 0.15,
+    "generalization": 0.75,
+    "status": "ok"
+  },
+  "level": 1,
+  "validated_at": "2026-09-12T01:55:49.956209+00:00"
+}
